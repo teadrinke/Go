@@ -1,4 +1,4 @@
-module github.com/teadrinke/Go/rssagg
+module github.com/teadrinke/Go
 
 go 1.24.3
 
