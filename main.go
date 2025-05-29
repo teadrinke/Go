@@ -20,6 +20,8 @@ package main
 //origin: scheme + host + port
 //cross-origin resource sharing --> one script running on one origin may access resources on another origin; eg. Js code on one origin tries to access api on another origin
 import (
+	
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -28,7 +30,15 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+	"github.com/teadrinke/Go/internal/database"
+	
+
+	_ "github.com/lib/pq"
 )
+
+type apiConfig struct {
+	DB *database.Queries
+}
 
 func main() {
 	fmt.Println("Hello world!")
@@ -38,6 +48,25 @@ func main() {
 	portString := os.Getenv("PORT")
 	if portString == ""{
 		log.Fatal("PORT is not found in the environment")
+	}
+
+	dbUrl := os.Getenv("DB_URL")
+	if dbUrl == ""{
+		log.Fatal("DB_URL is not found in the environment")
+	}
+
+	// sql.Open("postgres", dbUrl)
+
+	conn, err := sql.Open("postgres", dbUrl)
+	if err != nil {
+		log.Fatal("Can't connect to database:", err)
+	}
+
+	queries := database.New(conn)
+	
+
+	apiCfg := apiConfig{
+		DB : queries,
 	}
 
 	router := chi.NewRouter()
@@ -55,16 +84,23 @@ func main() {
 
 	v1Router.Get("/healthz", handlerReadiness)
 	v1Router.Get("/err", handleErr)
-
+	v1Router.Post("/users", apiCfg.handlerCreateUser)
+	v1Router.Get("/users", apiCfg.middlewareAuth(apiCfg.handlerGetUser))
+	v1Router.Post("/feeds", apiCfg.middlewareAuth(apiCfg.handlerCreateFeed))
+	v1Router.Get("/feeds", apiCfg.handlerGetFeeds)
 	router.Mount("/v1", v1Router)
+	// v1Router.Use(middleware.Logger)
+
 
 	srv := &http.Server{
 		Handler: router,
 		Addr : ":" + portString,
 	}
-
+	log.Println("Try opening: http://localhost:" + portString + "/v1/healthz")
 	log.Printf("Server starting on port %v", portString)
-	err := srv.ListenAndServe()
+	
+
+	err = srv.ListenAndServe()
 	if err!=nil {
 		log.Fatal(err)
 	}
